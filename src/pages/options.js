@@ -526,15 +526,17 @@ function show_visited_status(text) {
 }
 
 function load_visited() {
-	var v = params.visited || { enabled: true, color: "" };
+	var v = params.visited || { enabled: true, color: "", auto: false };
 	$("#visited_enabled").prop("checked", v.enabled !== false);
 	$("#visited_color").val(v.color || "");
+	$("#visited_auto").prop("checked", v.auto === true);
 }
 
 function save_visited() {
 	params.visited = {
 		enabled: $("#visited_enabled").is(":checked"),
-		color: $.trim($("#visited_color").val() || "")
+		color: $.trim($("#visited_color").val() || ""),
+		auto: $("#visited_auto").is(":checked")
 	};
 	save_params();
 	show_visited_status("已保存");
@@ -567,6 +569,7 @@ $(function() {
 	document.getElementById("save").addEventListener("click", save_action);
 	$("#visited_enabled").on("change", save_visited);
 	$("#visited_color").on("change", save_visited);
+	$("#visited_auto").on("change", save_visited);
 	$("#visited_clear").on("click", clear_visited);
 
 	setup_form();

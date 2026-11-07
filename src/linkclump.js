@@ -31,11 +31,20 @@ var timer = 0;
    于是标题文字不变色。此机制无法在扩展内恢复，改为自己记录 URL 并给 <a> 加标记。 */
 const VISITED_CLASS = "linkclump-visited";
 const VISITED_BOX_CLASS = "linkclump-box";
-let visitedConfig = { enabled: true, color: "" };
+// 与 Bilibili-Evolved 等重度脚本共存的关键：每次 classList.add 都是一条 attribute mutation，
+// B-E 的 allMutations（document.body + attributes:true）会给每个订阅者对每条 mutation 跑一次全文档查询。
+// 因此默认只标记视口内少量链接、分批摊开，且不监听 DOM；iframe 里完全不自动标记。
+const IS_TOP_FRAME = (window.top === window);
+const VISIBLE_MARK_LIMIT = 40;
+const MARK_TOTAL_LIMIT = 120;
+const MARK_BATCH_SIZE = 6;
+const MARK_BATCH_DELAY = 250;
+let visitedConfig = { enabled: true, color: "", auto: false };
 let visitedUrls = new Set();
 let visitedObserver = null;
 let visitedTimer = 0;
 let visitedRoots = [];
+let detectedColorCache = null;
 
 function normalizeUrl(href) {
 	try {
@@ -71,7 +80,11 @@ function parseVisitedColor(text) {
 }
 
 function detectSiteVisitedColor() {
+	if (detectedColorCache !== null) {
+		return detectedColorCache;
+	}
 	var found = "";
+	var scanned = 0;
 	for (var i = 0; i < document.styleSheets.length; i++) {
 		var sheet = document.styleSheets[i];
 		try {
@@ -80,7 +93,7 @@ function detectSiteVisitedColor() {
 				continue;
 			}
 			if (sheet.ownerNode && sheet.ownerNode.tagName === "STYLE") {
-				found = parseVisitedColor(sheet.ownerNode.textContent || "") || found;
+				found = parseVisitedColor((sheet.ownerNode.textContent || "").slice(0, 500000)) || found;
 				continue;
 			}
 			var rules = sheet.cssRules;
@@ -88,32 +101,52 @@ function detectSiteVisitedColor() {
 				continue;
 			}
 			for (var j = 0; j < rules.length; j++) {
-				if (rules[j].cssText && rules[j].cssText.indexOf(":visited") !== -1) {
+				// 先用 selectorText 预筛，避免对每条规则都生成 cssText
+				if (!rules[j].selectorText || rules[j].selectorText.indexOf(":visited") === -1) {
+					continue;
+				}
+				scanned++;
+				if (scanned > 20000) {
+					break;
+				}
+				if (rules[j].cssText) {
 					found = parseVisitedColor(rules[j].cssText) || found;
 				}
 			}
 		} catch (error) { /* 跨域样式表禁止读取 */ }
 	}
+	detectedColorCache = found;
 	return found;
 }
 
-// 同源外链样式表异步补检（跨域 / CDN 样式表读不到时由用户在选项里手填颜色）
+// 同源外链样式表异步补检（跨域 / CDN 样式表读不到时由用户在选项里手填颜色）。
+// 限制最多 2 个、延迟到页面空闲，避免在 B 站这类多 CSS 站点重复下载/解析。
 function fetchSiteVisitedColor() {
-	if (!visitedConfig.enabled || visitedConfig.color) {
+	if (!IS_TOP_FRAME || !visitedConfig.enabled || visitedConfig.color) {
 		return;
 	}
-	for (var i = 0; i < document.styleSheets.length; i++) {
+	var hrefs = [];
+	for (var i = 0; i < document.styleSheets.length && hrefs.length < 2; i++) {
 		var href = document.styleSheets[i].href;
-		if (!href || href.indexOf(window.location.origin) !== 0) {
-			continue;
+		if (href && href.indexOf(window.location.origin) === 0) {
+			hrefs.push(href);
 		}
-		fetch(href).then(function (response) { return response.text(); }).then(function (text) {
-			var color = parseVisitedColor(text);
-			if (color && !visitedConfig.color) {
-				document.documentElement.style.setProperty("--linkclump-visited-color", color);
-			}
-		}).catch(function () { /* 忽略 */ });
 	}
+	if (hrefs.length === 0) {
+		return;
+	}
+	setTimeout(function () {
+		for (var k = 0; k < hrefs.length; k++) {
+			(function (target) {
+				fetch(target).then(function (response) { return response.text(); }).then(function (text) {
+					var color = parseVisitedColor(text.slice(0, 500000));
+					if (color && !visitedConfig.color) {
+						document.documentElement.style.setProperty("--linkclump-visited-color", color);
+					}
+				}).catch(function () { /* 忽略 */ });
+			})(hrefs[k]);
+		}
+	}, 1500);
 }
 
 function applyVisitedColor() {
@@ -126,7 +159,9 @@ function applyVisitedColor() {
 	var detected = custom ? "" : detectSiteVisitedColor();
 	var color = custom || detected || "#551A8B";
 	try {
-		document.documentElement.style.setProperty("--linkclump-visited-color", color);
+		if (document.documentElement.style.getPropertyValue("--linkclump-visited-color") !== color) {
+			document.documentElement.style.setProperty("--linkclump-visited-color", color);
+		}
 	} catch (error) { /* 忽略 */ }
 	if (!custom && !detected) {
 		fetchSiteVisitedColor();
@@ -150,6 +185,53 @@ function markElementTree(root) {
 	}
 }
 
+// 分批加 class：避免一次几百条 attribute mutation 把 B-E 的 allMutations 订阅者打爆
+function markInBatches(elements) {
+	if (!elements || elements.length === 0) {
+		return;
+	}
+	var index = 0;
+	function step() {
+		var end = Math.min(index + MARK_BATCH_SIZE, elements.length);
+		for (; index < end; index++) {
+			if (elements[index].isConnected) {
+				elements[index].classList.add(VISITED_CLASS);
+			}
+		}
+		if (index < elements.length) {
+			setTimeout(step, MARK_BATCH_DELAY);
+		}
+	}
+	setTimeout(step, 250);
+}
+
+// 只标记视口附近的链接，最多 80 个；不遍历全页、不监听 DOM
+function markVisibleLinks() {
+	if (!IS_TOP_FRAME || !visitedConfig.enabled || visitedUrls.size === 0) {
+		return;
+	}
+	var links = Array.from(document.links);
+	var matched = [];
+	var top = -200;
+	var bottom = window.innerHeight + 200;
+	for (var i = 0; i < links.length && matched.length < VISIBLE_MARK_LIMIT; i++) {
+		var link = links[i];
+		if (link.classList.contains(VISITED_CLASS)) {
+			continue;
+		}
+		var key = normalizeUrl(link.href);
+		if (!key || !visitedUrls.has(key)) {
+			continue;
+		}
+		var rect = link.getBoundingClientRect();
+		if (rect.bottom < top || rect.top > bottom) {
+			continue;
+		}
+		matched.push(link);
+	}
+	markInBatches(matched);
+}
+
 function markVisitedNow(urls) {
 	if (!visitedConfig.enabled) {
 		return;
@@ -167,12 +249,14 @@ function markVisitedNow(urls) {
 	}
 	var wanted = new Set(keys);
 	var links = Array.from(document.links);
-	for (var j = 0; j < links.length; j++) {
+	var matched = [];
+	for (var j = 0; j < links.length && matched.length < MARK_TOTAL_LIMIT; j++) {
 		var linkKey = normalizeUrl(links[j].href);
-		if (linkKey && wanted.has(linkKey)) {
-			links[j].classList.add(VISITED_CLASS);
+		if (linkKey && wanted.has(linkKey) && !links[j].classList.contains(VISITED_CLASS)) {
+			matched.push(links[j]);
 		}
 	}
+	markInBatches(matched);
 	chrome.runtime.sendMessage({ message: "markVisited", urls: keys }).catch(function () { /* 忽略 */ });
 }
 
@@ -185,6 +269,11 @@ function clearVisitedNow() {
 }
 
 function startVisitedObserver() {
+	// 默认不监听 DOM：B-E 等脚本每次重渲染都会产生大量新增节点，
+	// 若这里跟着标记，会形成「它渲染 → 我们标记 → 它的 allMutations 收到 class mutation」的持续放大。
+	if (!IS_TOP_FRAME || !visitedConfig.auto || !visitedConfig.enabled) {
+		return;
+	}
 	if (visitedObserver) {
 		return;
 	}
@@ -219,7 +308,8 @@ function startVisitedObserver() {
 
 Promise.all([
 	chrome.runtime.sendMessage({ message: "init" }),
-	chrome.runtime.sendMessage({ message: "getVisited" })
+	// iframe 里不拉取整份已访问列表，避免每个 frame 都传几百 KB
+	IS_TOP_FRAME ? chrome.runtime.sendMessage({ message: "getVisited" }) : Promise.resolve({ urls: [] })
 ]).then(function (responses) {
 	var response = responses[0];
 	var visitedResponse = responses[1] || { urls: [] };
@@ -232,11 +322,14 @@ Promise.all([
 	}
 
 	settings = response.actions;
-	visitedConfig = response.visited || { enabled: true, color: "" };
-	visitedUrls = new Set(visitedResponse.urls || []);
+	visitedConfig = response.visited || { enabled: true, color: "", auto: false };
+	if (typeof visitedConfig.auto !== "boolean") {
+		visitedConfig.auto = false;
+	}
+	visitedUrls = new Set(IS_TOP_FRAME ? (visitedResponse.urls || []) : []);
 
 	applyVisitedColor();
-	markElementTree(document);
+	markVisibleLinks();
 	startVisitedObserver();
 
 	var allowed = true;
@@ -265,8 +358,16 @@ chrome.runtime.onMessage.addListener(function (request) {
 	if (request.message === "update") {
 		settings = request.settings.actions;
 		visitedConfig = request.settings.visited || visitedConfig;
+		if (typeof visitedConfig.auto !== "boolean") {
+			visitedConfig.auto = false;
+		}
+		if (!visitedConfig.auto && visitedObserver) {
+			visitedObserver.disconnect();
+			visitedObserver = null;
+		}
 		applyVisitedColor();
-		markElementTree(document);
+		markVisibleLinks();
+		startVisitedObserver();
 	} else if (request.message === "visitedCleared") {
 		clearVisitedNow();
 	}

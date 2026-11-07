@@ -23,7 +23,8 @@ const DEFAULT_SETTINGS = {
     // Chrome 136+ :visited 分区兼容
     visited: {
         enabled: true,
-        color: ""      // 留空 = 自动匹配站点已访问色，失败时用 Chrome 默认紫色
+        color: "",     // 留空 = 自动匹配站点已访问色，失败时用 Chrome 默认紫色
+        auto: false    // 自动标记新加载的链接（监听 DOM，与 Bilibili-Evolved 等脚本冲突，默认关闭）
     }
 };
 
@@ -47,6 +48,9 @@ export class SettingsManager {
         }
         if (typeof settings.visited.color !== "string") {
             settings.visited.color = "";
+        }
+        if (typeof settings.visited.auto !== "boolean") {
+            settings.visited.auto = false;
         }
         return settings;
     }

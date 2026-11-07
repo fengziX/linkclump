@@ -65,12 +65,16 @@
 
 			<div id="visited" class="info-box">
 				<h2>已访问链接标记（Chrome 136+ 兼容）</h2>
-				<p>Chrome 136 起对 <code>:visited</code> 历史做分区隔离，150 起彻底强制：扩展从后台打开的链接不会被原网页记为「已访问」，所以标题文字不会变色。本功能由扩展自己记录已打开的网址并给链接染色，效果与旧版一致，刷新页面后仍然保留。</p>
+				<p>Chrome 136 起对 <code>:visited</code> 历史做分区隔离，150 起彻底强制：扩展从后台打开的链接不会被原网页记为「已访问」，所以标题文字不会变色。本功能由扩展自己记录已打开的网址并给链接染色，效果与旧版一致。</p>
+				<p>为避免与 Bilibili-Evolved 等重度脚本互相放大，默认只标记当前视口附近的链接（最多 80 个、分批进行），iframe 内不自动标记，也不监听页面变动；滚动到新区域或刷新后，当前屏幕内的链接仍会重新染色。</p>
 				<p><label for="visited_enabled" style="float:none;width:auto;">启用已访问标记</label>
 					<input type="checkbox" id="visited_enabled" checked /></p>
 				<p><label for="visited_color" style="float:none;width:auto;">标记颜色</label>
 					<input type="text" id="visited_color" size="18" placeholder="留空 = 自动匹配站点" />
 					<span class="hint">可填 #551A8B、#8E8E8E 等；留空时自动读取站点自己的已访问色，读不到则用 Chrome 默认紫色。</span></p>
+				<p><label for="visited_auto" style="float:none;width:auto;">自动标记新加载的链接</label>
+					<input type="checkbox" id="visited_auto" />
+					<span class="hint">默认关闭。开启后会监听页面 DOM 并给新出现的链接染色；与 Bilibili-Evolved 等脚本同时使用时可能导致页面卡顿，B 站建议保持关闭。</span></p>
 				<p><a href="#" id="visited_clear" class="button">清除已访问标记</a>
 					<span id="visited_status" class="hint"></span></p>
 			</div>
