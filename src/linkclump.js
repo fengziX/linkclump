@@ -61,20 +61,46 @@ function normalizeUrl(href) {
 
 // Chrome 136+ 会把 :visited 规则的 style.color 从 CSSOM 里隐藏（隐私缓解），
 // 所以只能从原始 CSS 文本里解析站点自定义的已访问色。
+//
+// 这里必须用线性扫描，不能用 /([^{}]*:visited[^{}]*)\{([^{}]*)\}/ 这类正则：
+// [^{}]* 在"没有 :visited 的大段文本"上会从每个起始位置反复回溯，复杂度 O(n²)。
+// B 站内联样式可达几十万字符，实测旧正则单次解析把主线程占住 60 秒，load 事件被拖到 63 秒。
 function parseVisitedColor(text) {
+	if (!text) {
+		return "";
+	}
 	var found = "";
-	var ruleRe = /([^{}]*:visited[^{}]*)\{([^{}]*)\}/g;
-	var match;
-	while ((match = ruleRe.exec(text)) !== null) {
-		var color = /color\s*:\s*([^;!}]+)/i.exec(match[2]);
-		if (!color) {
+	var pos = 0;
+	var MAX_BODY = 4096;
+	while (true) {
+		var hit = text.indexOf(":visited", pos);
+		if (hit === -1) {
+			break;
+		}
+		var open = text.indexOf("{", hit);
+		if (open === -1) {
+			break;
+		}
+		// 选择器在遇到 { 之前就结束了，说明这条 :visited 后面没有规则块，跳过
+		var closeBefore = text.indexOf("}", hit);
+		if (closeBefore !== -1 && closeBefore < open) {
+			pos = closeBefore + 1;
 			continue;
 		}
-		var value = color[1].trim();
-		if (value && value.indexOf("linkclump") === -1 &&
-			value !== "inherit" && value !== "currentColor" && value !== "transparent") {
-			found = value;
+		var close = text.indexOf("}", open);
+		if (close === -1) {
+			break;
 		}
+		var body = text.slice(open + 1, Math.min(close, open + MAX_BODY));
+		var color = /color\s*:\s*([^;!}]+)/i.exec(body);
+		if (color) {
+			var value = color[1].trim();
+			if (value && value.indexOf("linkclump") === -1 &&
+				value !== "inherit" && value !== "currentColor" && value !== "transparent") {
+				found = value;
+			}
+		}
+		pos = close + 1;
 	}
 	return found;
 }
@@ -150,6 +176,11 @@ function fetchSiteVisitedColor() {
 }
 
 function applyVisitedColor() {
+	// 子 frame 不参与取色：同一份颜色变量在顶层设一次即可，
+	// 避免每个 iframe 都把样式表扫一遍（B 站框架多，扫描成本会被放大）。
+	if (!IS_TOP_FRAME) {
+		return;
+	}
 	if (!visitedConfig.enabled) {
 		document.documentElement.classList.remove("linkclump-visited-on");
 		return;
