@@ -1,28 +1,45 @@
 {
-  "manifest_version": 2,
-  "name": "Linkclump",
-  "version": "2.9.5",
-  "description": "Lets you open, copy or bookmark multiple links at the same time.",
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "3.0.0",
+  "default_locale": "zh_CN",
+  "description": "__MSG_extDesc__",
+  "minimum_chrome_version": "120",
   "background": {
-    "scripts": ["settings_manager.js", "background.js"],
-    "persistent": false
+    "service_worker": "background.js",
+    "type": "module"
   },
   "options_page": "pages/options.html",
-  "icons": {"16": "images/16x16.png",
-           "48": "images/48x48.png",
-          "128": "images/128x128.png" },
+  "icons": {
+    "16": "images/16x16.png",
+    "48": "images/48x48.png",
+    "128": "images/128x128.png"
+  },
   "content_scripts": [
     {
-    "matches": ["<all_urls>"],
-    "js": ["linkclump.js"],
-    "run_at": "document_end",
-    "all_frames": true
+      "matches": ["<all_urls>"],
+      "js": ["linkclump.js"],
+      "css": ["visited.css"],
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
   "permissions": [
-    "bookmarks", "http://*/*", "https://*/*"
+    "bookmarks",
+    "tabs",
+    "storage",
+    "scripting",
+    "offscreen",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "web_accessible_resources": [
-    "pages/test_area.html"
+    {
+      "resources": ["pages/test_area.html"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }

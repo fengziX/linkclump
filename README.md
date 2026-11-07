@@ -1,16 +1,51 @@
-# Linkclump
+# Linkclump（MV3 中文版）
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/9e38a24d7f524c6ca73c07e8948d58a7)](https://www.codacy.com/manual/benblack86/linkclump?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=benblack86/linkclump&amp;utm_campaign=Badge_Grade)
+框选批量打开、复制或收藏多个链接的 Chrome 扩展。基于 [benblack86/linkclump](https://github.com/benblack86/linkclump) 的 fork，已迁移到 Manifest V3、界面汉化，并修复 Chrome 136+ 起「批量打开后标题不变色」的问题。
 
-## Support
-Support is not provided as this is a free extension.
+## 功能
 
-## Installation
-Install it by visiting the [chrome web store](https://chrome.google.com/webstore/detail/linkclump/lfpjkncokllnfokkgpkobnkbkmelfefj).
+- 按住 `Z` + 鼠标左键拖出选框，松开即批量处理框内链接（默认在新标签页打开）。
+- 选项页可添加多组「鼠标键 + 按键 + 动作」：新窗口、新标签页、加入书签、复制到剪贴板。
+- 高级选项：智能选择、关键词过滤、打开间隔、自动关闭标签、去除重复链接、倒序打开、标签位置、不聚焦新窗口、站点黑名单。
+- **已访问链接标记**：Chrome 136 起 `:visited` 历史按「链接 URL + 顶级站点 + 框架源」分区，扩展从后台打开的链接不会被原页面记为已访问，标题文字不会变色。本扩展自行记录已打开 URL 并给链接染色，颜色自动匹配站点、可手填或关闭、支持清除记录，刷新页面后仍保留。
 
-## Build
-The build process uses ant (run `ant` at the command line) and will run tests and create a zip file that can be uploaded to the chrome store. From docker:
+## 安装
 
+要求 Chrome 120 及以上。
+
+1. 克隆本仓库或下载源码。
+2. 打开 `chrome://extensions`，开启右上角「开发者模式」。
+3. 点「加载已解压的扩展程序」，选择仓库中的 `src/` 目录（`manifest.json` 所在目录）。
+
+> Chrome 137+ 官方版已忽略 `--load-extension` 命令行参数，不能再用命令行侧载。
+> 本地 `file://` 页面还需在扩展详情页勾选「允许访问文件网址」。
+
+## 使用
+
+| 操作 | 结果 |
+| --- | --- |
+| `Z` + 鼠标左键拖框 | 按默认动作处理框内链接 |
+| 选项页 → 动作列表 | 修改或新增触发组合、动作与高级选项 |
+| 选项页 → 已访问链接标记 | 开关染色、填写颜色（如 `#8E8E8E`）、清除记录 |
+| 选项页 → 站点黑名单 | 逐行填写网址，支持正则 |
+
+设置保存在 `chrome.storage.local`；旧 MV2 版的 `localStorage` 设置不会自动迁移，首次使用为默认配置。
+
+## 打包
+
+扩展根目录就是 `src/`，无需构建步骤。把 `src/` 内的所有文件打成 zip（`manifest.json` 必须在压缩包根目录）即可分发：
+
+```bash
+cd src && zip -r ../Linkclump-MV3-zh-CN.zip .
 ```
-docker run --mount type=bind,source="$(pwd)",target=/app frekele/ant:1.10.3-jdk8u111 ant -f /app/build.xml
-```
+
+## 已知限制
+
+- 已访问标记是扩展自己加的 class，不是浏览器原生 `:visited` 状态；清除浏览器历史不会清除本扩展的记录，请用选项页的「清除已访问标记」。
+- 只有「新标签页 / 新窗口」动作会标记；复制、加书签不算访问。
+- 站点样式表跨域且无 CORS 时无法自动取色，回退 Chrome 默认紫 `#551A8B`，可在选项页手填。
+- 延时打开 / 自动关闭的待办队列存于会话级存储，浏览器进程重启后不再续跑。
+
+## 源码与许可
+
+源码：`https://github.com/fengziX/linkclump`　|　许可：见 [LICENSE.md](LICENSE.md)

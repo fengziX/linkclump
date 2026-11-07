@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "Linkclump 批量打开链接"
+  },
+  "extDesc": {
+    "message": "框选即可批量打开、复制或收藏多个链接，并自动标记已访问的标题（兼容 Chrome 136+ 链接历史分区）。"
+  }
+}

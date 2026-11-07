@@ -1,60 +1,60 @@
 var config = {
 	"triggers": 
-		[{"name": "Left"}, {"name": "Middle"}, {"name": "Right"}],
+		[{"name": "左键"}, {"name": "中键"}, {"name": "右键"}],
 	"actions": {
-		"win": {"name": "Opened in a New Window", "options": ["smart", "ignore", "delay", "block", "reverse", "unfocus"]},
-		"tabs": {"name": "Opened as New Tabs", "options": ["smart", "ignore", "delay", "close", "block", "reverse", "end"]},
-		"bm": {"name": "Bookmarked", "options": ["smart", "ignore", "block", "reverse"]},
-		"copy": {"name": "Copied to clipboard", "options": ["smart", "ignore", "copy", "block", "reverse"]}
+		"win": {"name": "在新窗口打开", "options": ["smart", "ignore", "delay", "block", "reverse", "unfocus"]},
+		"tabs": {"name": "在新标签页打开", "options": ["smart", "ignore", "delay", "close", "block", "reverse", "end"]},
+		"bm": {"name": "加入书签", "options": ["smart", "ignore", "block", "reverse"]},
+		"copy": {"name": "复制到剪贴板", "options": ["smart", "ignore", "copy", "block", "reverse"]}
 	},
 	"options": {
 		"smart": {
-			"name": "smart select",
+			"name": "智能选择",
 			"type": "selection", 
-			"data": ["on", "off"],
-			"extra": "with smart select turned on linkclump tries to select only the important links"
+			"data": ["开启", "关闭"],
+			"extra": "开启后 Linkclump 会尽量只选中重要链接（标题类链接）"
 		},
 	"ignore": {
-		"name": "filter links",
+		"name": "链接过滤",
 		"type": "selection-textbox",
-		"data": ["exclude links with words", "include links with words"],
-		"extra": "filter links that include/exclude these words; separate words with a comma ,"
+		"data": ["排除含这些词的链接", "只包含含这些词的链接"],
+		"extra": "按关键词过滤链接；多个词用英文逗号 , 分隔"
 		},
 	"copy": {
-		"name": "copy format",
+		"name": "复制格式",
 		"type": "selection",
-		"data": ["URLS with titles", "URLS only", "URLS only space separated", "titles only", "as link HTML", "as list link HTML", "as Markdown"],
-		"extra": "format of the links saved to the clipboard"
+		"data": ["网址 + 标题", "仅网址", "仅网址（空格分隔）", "仅标题", "链接 HTML", "列表链接 HTML", "Markdown"],
+		"extra": "复制到剪贴板时使用的格式"
 		},
 	"delay": {
-		"name": "delay in opening",
+		"name": "打开间隔",
 		"type": "textbox",
-		"extra":"number of seconds between the opening of each link"
+		"extra":"每个链接之间间隔的秒数"
 		},
 	"close": {
-		"name": "close tab time",
+		"name": "自动关闭标签",
 		"type": "textbox",
-		"extra":"number of seconds before closing opened tab (0 means the tab wouldn't close)"
+		"extra":"打开后多少秒自动关闭标签（0 表示不关闭）"
 		},
 	"block": {
-		"name": "block repeat links in selection",
+		"name": "去除重复链接",
 		"type": "checkbox",
-		"extra":"select to block repeat links from opening"
+		"extra":"勾选后同一网址只处理一次"
 		},
 	"reverse": {
-		"name": "reverse order",
+		"name": "倒序打开",
 		"type": "checkbox",
-		"extra":"select to have links opened in reverse order"
+		"extra":"勾选后按相反顺序处理链接"
 		},
 	"end": {
-		"name": "open tabs at the end",
+		"name": "在末尾打开标签",
 		"type": "checkbox",
-		"extra": "select to have links opened at the end of all other tabs"
+		"extra": "勾选后新标签排在所有标签最后"
 		},
 	"unfocus": {
-		"name": "do not focus on new window",
+		"name": "不聚焦新窗口",
 		"type": "checkbox",
-		"extra": "select to stop the new window from coming to the front"
+		"extra": "勾选后新窗口不会切到前台"
 		}
 	}
 };
@@ -161,8 +161,8 @@ function load_action(id) {  // into form
 
 function delete_action(id, div) {
     div.fadeOut("swing", function(){
-        var del = $("<div class='undo'>Action has been deleted </div>");
-        var undo = $("<a>undo</a>").click({"i":id, "param":params.actions[id]},
+        var del = $("<div class='undo'>已删除该动作 </div>");
+        var undo = $("<a>撤销</a>").click({"i":id, "param":params.actions[id]},
             function(event) {
                 div_history[event.data.i].replaceWith(setup_action(event.data.param, event.data.i));
                 params.actions[event.data.i] = event.data.param;
@@ -188,9 +188,9 @@ function setup_action(param, id) {
 	var setting = $("<div class='setting' id='action_"+id+"'>");
 
 	setting.append("<h3>"+config.actions[param.action].name+"</h3>");
-	setting.append("Activate by "+config.triggers[param.mouse].name + " mouse button");
+	setting.append("触发方式：" + config.triggers[param.mouse].name + "鼠标按钮");
 	if(param.key > 0) {
-		setting.append(" and \""+keys[param.key]+"\" key ");
+		setting.append(" + 「" + keys[param.key] + "」键");
 	}
 
 	var list = $("<ul>");
@@ -233,18 +233,18 @@ function setup_action(param, id) {
 
 		list.append("<li>"+text+"</li>");
 	}
-	list.append("<li>selection box color: <div style='background-color: "+param.color+"' class='color'></div></li>");
+	list.append("<li>选框颜色：<div style='background-color: "+param.color+"' class='color'></div></li>");
 
 	setting.append(list);
 
-	var edit = $("<a href='#' class='button edit'>Edit</a>").click({'i':id},
+	var edit = $("<a href='#' class='button edit'>编辑</a>").click({'i':id},
 		function(event) {
 			load_action(event.data.i, $(this).parent().parent());
 			return false;
 		}
 	);
 
-	var del = $("<a href='#' class='button delete'>Delete</a>").click({"i":id},
+	var del = $("<a href='#' class='button delete'>删除</a>").click({"i":id},
 		function(event) {
 			delete_action(event.data.i, $(this).parent());
 			return false;
@@ -307,7 +307,7 @@ function setup_text(keys) {
 	$("#mouse_name").text(config.triggers[param.mouse].name);
 	$("#action_name").text(config.actions[param.action].name);
 	if(param.key > 0) {
-		$("#key_name").html("the <b>"+keys[param.key]+"</b> key and");
+		$("#key_name").html("<b>"+keys[param.key]+"</b> 键 + ");
 	} else {
 		$("#key_name").html("");
 	}
@@ -322,7 +322,7 @@ function check_selection() {
     var keyWarning = $('#key_warning');
     keyWarning.empty();
 	if (k === "0") {
-        keyWarning.append("WARNING: Not using a key could cause unexpected behavior on some websites");
+        keyWarning.append("⚠️ 不设置按键可能在某些网站上误触发");
         if($(".warning2").is(":hidden")) {
             $(".warning2").fadeIn();
         }
@@ -502,14 +502,16 @@ function save_action(event) {
 }
 
 function save_params() {
-	chrome.extension.sendMessage({
+	chrome.runtime.sendMessage({
 		message: "update",
 		settings: params
+	}).catch(function (error) {
+		console.log("[Linkclump] 保存设置失败：" + error);
 	});
 }
 
 function save_block() {
-	// replace any whitespace at end to stop empty site listings
+	// 去掉首尾空白，避免产生空的站点条目
 	var sites = $("#form_block").val().replace(/^\s+|\s+$/g, "").split("\n");
 	
 	if (Array.isArray(sites)) {
@@ -518,10 +520,39 @@ function save_block() {
 	}
 }
 
+function show_visited_status(text) {
+	var status = $("#visited_status").text(text).stop(true, true).fadeIn();
+	setTimeout(function () { status.fadeOut(); }, 1800);
+}
+
+function load_visited() {
+	var v = params.visited || { enabled: true, color: "" };
+	$("#visited_enabled").prop("checked", v.enabled !== false);
+	$("#visited_color").val(v.color || "");
+}
+
+function save_visited() {
+	params.visited = {
+		enabled: $("#visited_enabled").is(":checked"),
+		color: $.trim($("#visited_color").val() || "")
+	};
+	save_params();
+	show_visited_status("已保存");
+}
+
+function clear_visited(event) {
+	chrome.runtime.sendMessage({ message: "clearVisited" }).then(function () {
+		show_visited_status("已清除所有已访问标记");
+	}).catch(function (error) {
+		show_visited_status("清除失败：" + error);
+	});
+	event.preventDefault();
+}
+
 $(function() {
 	var isFirstTime = window.location.href.indexOf("init=true") > -1;
 
-	// temp check to not load if in test mode
+	// 测试模式下不加载
 	if (document.getElementById("guide2") === null) {
 		return
 	}
@@ -534,25 +565,34 @@ $(function() {
 	document.getElementById("form_key").addEventListener("change", check_selection);
 	document.getElementById("cancel").addEventListener("click", close_form);
 	document.getElementById("save").addEventListener("click", save_action);
+	$("#visited_enabled").on("change", save_visited);
+	$("#visited_color").on("change", save_visited);
+	$("#visited_clear").on("click", clear_visited);
 
 	setup_form();
 
-	chrome.extension.sendMessage({
+	chrome.runtime.sendMessage({
 		message: "init"
-	}, function(response){
+	}).then(function(response){
 		params = response;
+		if (!params.visited) {
+			params.visited = { enabled: true, color: "" };
+		}
 
 		for(var i in params.actions) {
 			$("#settings").append(setup_action(params.actions[i], i));
 		}
 		setup_text(keys);
 
-		$("#form_block").val(params.blocked.join("\n"));
+		$("#form_block").val((params.blocked || []).join("\n"));
+		load_visited();
 
 		if(isFirstTime) {
 			tour1();
 		} else {
 			tour2();
 		}
+	}).catch(function (error) {
+		console.log("[Linkclump] 读取设置失败：" + error);
 	});
 });

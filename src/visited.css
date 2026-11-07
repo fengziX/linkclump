@@ -1,0 +1,12 @@
+/* Linkclump: Chrome 136+ :visited 分区兼容标记。
+   由 manifest 的 content_scripts.css 注入，不受页面 CSP 影响。 */
+html.linkclump-visited-on a.linkclump-visited:link,
+html.linkclump-visited-on a.linkclump-visited:visited {
+    color: var(--linkclump-visited-color, #551a8b) !important;
+}
+
+/* 纯文字子元素继承上面的颜色；站点自己写了颜色规则时会覆盖本条（特异性为 0）。 */
+:where(a.linkclump-visited) :where(span, b, strong, em, i, font, small, div, p,
+                                    h1, h2, h3, h4, h5, h6, time, label) {
+    color: inherit;
+}

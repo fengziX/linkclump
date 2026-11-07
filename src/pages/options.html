@@ -1,6 +1,8 @@
-<html>
+<!DOCTYPE html>
+<html lang="zh-CN">
     <head>
-        <title>Options</title>
+        <meta charset="utf-8" />
+        <title>Linkclump 选项设置</title>
         <script type="text/javascript" src="../libs/jquery-1.8.2.min.js"></script>
         <script type="text/javascript" src="../libs/colorpicker/jquery.colorpicker.js"></script>
 		<script type="text/javascript" src="options.js"></script>
@@ -11,85 +13,95 @@
 		<div id="page1" class="page">
 			<div class="info-box">
 				<img src="../images/linkclump.png" />
-				<p>Welcome and thank you for trying out linkclump. To use linkclump you should press and hold <span id="key_name"></span> the <b><span id="mouse_name"></span></b> mouse button, then drag the selection box around the links you want to open. When you release the mouse button all the links will be <b><span id="action_name"></span></b>. You are now ready to go!</p>
-				
+				<p>感谢使用 Linkclump。按住 <span id="key_name"></span><b><span id="mouse_name"></span></b> 鼠标按钮，拖出一个选框圈住要处理的链接；松开鼠标后，选中的链接会被<b><span id="action_name"></span></b>。现在就可以开始使用了！</p>
+
 				<div id="test">
-				<p>Use the test area below to try out linkclump or click the option button at the bottom of the page to explore the many options available.</p>
+				<p>可以在下面的测试区试一试，或点击底部的「选项设置」调整更多动作。</p>
 				<br />
 				<iframe id="test_area" src="test_area.html" height="300"></iframe>
 				</div>
-				<br /><br /><a href="#" id="guide2" class="button">Options</a>
+				<br /><br /><a href="#" id="guide2" class="button">选项设置</a>
 			</div>
 		</div>
-		
-		
+
+
 		<div id="page2" class="page">
-			
+
 			<div id="welcome" class="info-box">
 				<img src="../images/linkclump.png" />
-				<p>Welcome to the options page, where you can change the default behaviour and add new actions.</p>
-				<a href="#" id="guide1" class="button">How does it work?</a>
-				<p>Do you love linkclump? Then please leave a rating, thank you :-)</p>
-				<a href="https://chrome.google.com/webstore/detail/linkclump/lfpjkncokllnfokkgpkobnkbkmelfefj/reviews" class="button" target="_blank">Rate</a>
+				<p>这里是选项设置页，可以修改默认行为、添加新的动作。</p>
+				<a href="#" id="guide1" class="button">怎么用？</a>
+				<p>觉得好用？欢迎给个好评，谢谢 :-)</p>
+				<a href="https://chrome.google.com/webstore/detail/linkclump/lfpjkncokllnfokkgpkobnkbkmelfefj/reviews" class="button" target="_blank">给个好评</a>
 			</div>
-			
+
 			<div id="actions" class="info-box">
-				<h2>Actions</h2>
+				<h2>动作列表</h2>
 				<div id="settings">
 				</div>
-				<a href="#" id="add" class="button">Add Action</a>
+				<a href="#" id="add" class="button">添加动作</a>
 			</div>
-			
+
 			<div class="info-box">
-				<h2>FAQ</h2>
+				<h2>常见问题</h2>
 				<br />
 				<ul>
-					<li><b>To use on local pages (i.e. file:// URLs)</b> you need to go to the extensions page (chrome://extensions) and tick the option "Allow access to file URLs" for the Linkclump extension.</li>
-					<li><b>Double tabs?</b> Make sure you don't have a similar extension installed. If you also have "Snap Links Lite" installed it might appear that you are only using Linkclump, but actually these extensions are also working in the background and will try to open tabs also.</li>
-					<li><b>Mandatory key?</b> If you want to use the right mouse button on the Linux/Mac operating systems then you have to select a key. This is due to the way Chrome is designed on these systems and is necessary to make Linkclump work. Left and middle mouse buttons are not affected.</li>
-					<li><b>Not working?</b> Make sure you are pressing the correct mouse button and key combination. Please note that chrome automatically disables in-browser extensions on the chrome webstore/extension web pages for security purposes.</li>
-					<li><b>Does not do what you want it to do?</b> There are a hand full of extension/add ons for different browsers that allow you to open multiple links and therefore there are going to be differences with functionality. I've tried to create this extension so that it is fast and versatile. You are very welcome and encouraged to contribute new features and code improvements to the Linkclump project.</li>
-					<li><b>Issues when zoomed out?</b> When zoomed out the scrolling functionality will be jerky and there isn't much that can be done about it.</li>
-					<li><b>Where is the source code?</b> You can find it on <a href="https://github.com/benblack86/linkclump" target="_blank">GitHub</a> and pull requests are welcome.</li>
+					<li><b>本地页面（file:// 地址）怎么用？</b> 打开扩展管理页（chrome://extensions），给 Linkclump 勾选「允许访问文件网址」。</li>
+					<li><b>打开了两份标签？</b> 检查是否装了功能相似的扩展。若同时装了 Snap Links Lite，看起来像是 Linkclump 在工作，实际上它也会在后台开标签。</li>
+					<li><b>必须设置按键吗？</b> 在 Linux / Mac 上想用右键就必须指定一个按键，这是 Chrome 的设计限制；左键和中键不受影响。</li>
+					<li><b>完全没反应？</b> 确认鼠标键与组合键设置正确。另外出于安全考虑，Chrome 会在网上应用店和扩展管理页面自动禁用扩展。</li>
+					<li><b>框选时页面文字被选中？</b> 本版本已改用标准的 user-select 禁用方式，若仍有异常请反馈具体站点。</li>
+					<li><b>缩放页面后滚动不流畅？</b> 浏览器缩放较小时自动滚动会有顿挫感，属于已知限制。</li>
+					<li><b>源码在哪里？</b> 见 <a href="https://github.com/fengziX/linkclump" target="_blank">GitHub 仓库</a>，欢迎提交改进。</li>
 				</ul>
 				<br />
 			</div>
-			
+
 			<div id="block" class="info-box">
-				<h2>Blocklist</h2>
-				<p>To stop linkclump on certain sites, please list the URLs below (one per line).
-					
+				<h2>站点黑名单</h2>
+				<p>不想让 Linkclump 在哪些站点生效，请逐行填写网址（支持正则）。
 				<textarea rows='6' cols='72' id="form_block"></textarea></p>
 			</div>
+
+			<div id="visited" class="info-box">
+				<h2>已访问链接标记（Chrome 136+ 兼容）</h2>
+				<p>Chrome 136 起对 <code>:visited</code> 历史做分区隔离，150 起彻底强制：扩展从后台打开的链接不会被原网页记为「已访问」，所以标题文字不会变色。本功能由扩展自己记录已打开的网址并给链接染色，效果与旧版一致，刷新页面后仍然保留。</p>
+				<p><label for="visited_enabled" style="float:none;width:auto;">启用已访问标记</label>
+					<input type="checkbox" id="visited_enabled" checked /></p>
+				<p><label for="visited_color" style="float:none;width:auto;">标记颜色</label>
+					<input type="text" id="visited_color" size="18" placeholder="留空 = 自动匹配站点" />
+					<span class="hint">可填 #551A8B、#8E8E8E 等；留空时自动读取站点自己的已访问色，读不到则用 Chrome 默认紫色。</span></p>
+				<p><a href="#" id="visited_clear" class="button">清除已访问标记</a>
+					<span id="visited_status" class="hint"></span></p>
+			</div>
 		</div>
-		
-		
+
+
 		<div id="form-background">
 			<div class="form">
-				<h2>Activation</h2>
-				<p>To activate the selection box you should press and hold...</p>
-				<div class="warning">WARNING: The selected mouse/key match another action already setup</div>
-				<p><label for="form_mouse">Mouse button</label><select id="form_mouse"></select></p>
-				<p><label for="form_key">+ key</label><select id="form_key"></select>
+				<h2>触发方式</h2>
+				<p>按住以下鼠标键 / 按键组合时启用框选……</p>
+				<div class="warning">⚠️ 该鼠标键 + 按键组合已被其他动作占用</div>
+				<p><label for="form_mouse">鼠标按钮</label><select id="form_mouse"></select></p>
+				<p><label for="form_key">+ 按键</label><select id="form_key"></select>
 					<div id="key_warning" class="warning2"></div>
 				</p>
-				<p><label for="form_color">Selection box color</label><select id='form_color'></select></p>
+				<p><label for="form_color">选框颜色</label><select id='form_color'></select></p>
 				<input type="hidden" id="form_id" value="">
-				
-				<h2>Action</h2>
-				<p>Selected links should be...</p>
+
+				<h2>执行动作</h2>
+				<p>选中的链接将被……</p>
 				<fieldset id="form_action"></fieldset>
-				
-				<h2>Advanced Options</h2>
-				<p>Available options for the action...</p>
+
+				<h2>高级选项</h2>
+				<p>该动作可用的选项……</p>
 				<div id="form_options"></div>
 				<div id="form_extra"></div>
-				
+
 				<br />
-				<a href="#" id="cancel" class="button cancel">Cancel</a>
-				<a href="#" id="save" class="button save">Save</a>
+				<a href="#" id="cancel" class="button cancel">取消</a>
+				<a href="#" id="save" class="button save">保存</a>
 			</div>
 		</div>
 	</body>
 </html>
-

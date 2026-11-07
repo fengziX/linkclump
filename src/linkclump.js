@@ -25,42 +25,250 @@ var scroll_bug_ignore = false;
 var os = ((navigator.appVersion.indexOf("Win") === -1) ? OS_LINUX : OS_WIN);
 var timer = 0;
 
-chrome.extension.sendMessage({
-	message: "init"
-}, function(response) {
-	if (response === null) {
-		console.log("Unable to load linkclump due to null response");
-	} else {
-		if (response.hasOwnProperty("error")) {
-			console.log("Unable to properly load linkclump, returning to default settings: " + JSON.stringify(response));
+/* ---------- Chrome 136+ :visited 分区兼容 ----------
+   分区键 = 链接 URL + 顶级站点 + 框架源。扩展用 chrome.tabs.create() 从后台打开链接，
+   浏览器不认为这是"在当前页面点击了该链接"，原页面的 :visited 数据库不会写入记录，
+   于是标题文字不变色。此机制无法在扩展内恢复，改为自己记录 URL 并给 <a> 加标记。 */
+const VISITED_CLASS = "linkclump-visited";
+const VISITED_BOX_CLASS = "linkclump-box";
+let visitedConfig = { enabled: true, color: "" };
+let visitedUrls = new Set();
+let visitedObserver = null;
+let visitedTimer = 0;
+let visitedRoots = [];
+
+function normalizeUrl(href) {
+	try {
+		var url = new URL(href, window.location.href);
+		if (url.protocol !== "http:" && url.protocol !== "https:") {
+			return null;
 		}
+		url.hash = "";
+		return url.href;
+	} catch (error) {
+		return null;
+	}
+}
 
-		settings = response.actions;
-
-		var allowed = true;
-		for (var i in response.blocked) {
-			if (response.blocked[i] == "") continue;
-			var re = new RegExp(response.blocked[i], "i");
-
-			if (re.test(window.location.href)) {
-				allowed = false;
-				console.log("Linkclump is blocked on this site: " + response.blocked[i] + "~" + window.location.href);
-			}
+// Chrome 136+ 会把 :visited 规则的 style.color 从 CSSOM 里隐藏（隐私缓解），
+// 所以只能从原始 CSS 文本里解析站点自定义的已访问色。
+function parseVisitedColor(text) {
+	var found = "";
+	var ruleRe = /([^{}]*:visited[^{}]*)\{([^{}]*)\}/g;
+	var match;
+	while ((match = ruleRe.exec(text)) !== null) {
+		var color = /color\s*:\s*([^;!}]+)/i.exec(match[2]);
+		if (!color) {
+			continue;
 		}
-
-		if (allowed) {
-			window.addEventListener("mousedown", this.mousedown, true);
-			window.addEventListener("keydown", this.keydown, true);
-			window.addEventListener("keyup", this.keyup, true);
-			window.addEventListener("blur", this.blur, true);
-			window.addEventListener("contextmenu", this.contextmenu, true);
+		var value = color[1].trim();
+		if (value && value.indexOf("linkclump") === -1 &&
+			value !== "inherit" && value !== "currentColor" && value !== "transparent") {
+			found = value;
 		}
 	}
+	return found;
+}
+
+function detectSiteVisitedColor() {
+	var found = "";
+	for (var i = 0; i < document.styleSheets.length; i++) {
+		var sheet = document.styleSheets[i];
+		try {
+			// 跳过本扩展注入的样式，避免解析到自引用的 CSS 变量
+			if (sheet.href && sheet.href.indexOf("visited.css") !== -1) {
+				continue;
+			}
+			if (sheet.ownerNode && sheet.ownerNode.tagName === "STYLE") {
+				found = parseVisitedColor(sheet.ownerNode.textContent || "") || found;
+				continue;
+			}
+			var rules = sheet.cssRules;
+			if (!rules) {
+				continue;
+			}
+			for (var j = 0; j < rules.length; j++) {
+				if (rules[j].cssText && rules[j].cssText.indexOf(":visited") !== -1) {
+					found = parseVisitedColor(rules[j].cssText) || found;
+				}
+			}
+		} catch (error) { /* 跨域样式表禁止读取 */ }
+	}
+	return found;
+}
+
+// 同源外链样式表异步补检（跨域 / CDN 样式表读不到时由用户在选项里手填颜色）
+function fetchSiteVisitedColor() {
+	if (!visitedConfig.enabled || visitedConfig.color) {
+		return;
+	}
+	for (var i = 0; i < document.styleSheets.length; i++) {
+		var href = document.styleSheets[i].href;
+		if (!href || href.indexOf(window.location.origin) !== 0) {
+			continue;
+		}
+		fetch(href).then(function (response) { return response.text(); }).then(function (text) {
+			var color = parseVisitedColor(text);
+			if (color && !visitedConfig.color) {
+				document.documentElement.style.setProperty("--linkclump-visited-color", color);
+			}
+		}).catch(function () { /* 忽略 */ });
+	}
+}
+
+function applyVisitedColor() {
+	if (!visitedConfig.enabled) {
+		document.documentElement.classList.remove("linkclump-visited-on");
+		return;
+	}
+	document.documentElement.classList.add("linkclump-visited-on");
+	var custom = (visitedConfig.color || "").trim();
+	var detected = custom ? "" : detectSiteVisitedColor();
+	var color = custom || detected || "#551A8B";
+	try {
+		document.documentElement.style.setProperty("--linkclump-visited-color", color);
+	} catch (error) { /* 忽略 */ }
+	if (!custom && !detected) {
+		fetchSiteVisitedColor();
+	}
+}
+
+function markElementTree(root) {
+	if (!visitedConfig.enabled || visitedUrls.size === 0 || !root || !root.querySelectorAll) {
+		return;
+	}
+	var anchors = root.querySelectorAll("a[href]");
+	for (var i = 0; i < anchors.length; i++) {
+		var key = normalizeUrl(anchors[i].href);
+		if (key && visitedUrls.has(key)) {
+			anchors[i].classList.add(VISITED_CLASS);
+		}
+	}
+	if (root.nodeType === 1 && root.tagName === "A" &&
+		visitedUrls.has(normalizeUrl(root.href))) {
+		root.classList.add(VISITED_CLASS);
+	}
+}
+
+function markVisitedNow(urls) {
+	if (!visitedConfig.enabled) {
+		return;
+	}
+	var keys = [];
+	for (var i = 0; i < urls.length; i++) {
+		var key = normalizeUrl(urls[i]);
+		if (key) {
+			visitedUrls.add(key);
+			keys.push(key);
+		}
+	}
+	if (keys.length === 0) {
+		return;
+	}
+	var wanted = new Set(keys);
+	var links = Array.from(document.links);
+	for (var j = 0; j < links.length; j++) {
+		var linkKey = normalizeUrl(links[j].href);
+		if (linkKey && wanted.has(linkKey)) {
+			links[j].classList.add(VISITED_CLASS);
+		}
+	}
+	chrome.runtime.sendMessage({ message: "markVisited", urls: keys }).catch(function () { /* 忽略 */ });
+}
+
+function clearVisitedNow() {
+	visitedUrls.clear();
+	var marked = Array.from(document.querySelectorAll("." + VISITED_CLASS));
+	for (var i = 0; i < marked.length; i++) {
+		marked[i].classList.remove(VISITED_CLASS);
+	}
+}
+
+function startVisitedObserver() {
+	if (visitedObserver) {
+		return;
+	}
+	visitedObserver = new MutationObserver(function (mutations) {
+		if (!visitedConfig.enabled || visitedUrls.size === 0) {
+			return;
+		}
+		for (var i = 0; i < mutations.length; i++) {
+			var nodes = mutations[i].addedNodes;
+			for (var j = 0; j < nodes.length; j++) {
+				var node = nodes[j];
+				if (node.nodeType === 1 && !(node.classList && node.classList.contains(VISITED_BOX_CLASS))) {
+					visitedRoots.push(node);
+				}
+			}
+		}
+		if (visitedRoots.length === 0) {
+			return;
+		}
+		clearTimeout(visitedTimer);
+		visitedTimer = setTimeout(function () {
+			var roots = visitedRoots.splice(0);
+			for (var k = 0; k < roots.length; k++) {
+				markElementTree(roots[k]);
+			}
+		}, 150);
+	});
+	try {
+		visitedObserver.observe(document.documentElement, { childList: true, subtree: true });
+	} catch (error) { /* 忽略 */ }
+}
+
+Promise.all([
+	chrome.runtime.sendMessage({ message: "init" }),
+	chrome.runtime.sendMessage({ message: "getVisited" })
+]).then(function (responses) {
+	var response = responses[0];
+	var visitedResponse = responses[1] || { urls: [] };
+	if (!response) {
+		console.log("[Linkclump] 设置加载失败：后台未返回数据");
+		return;
+	}
+	if (response.hasOwnProperty("error")) {
+		console.log("[Linkclump] 设置读取异常，已使用默认值：" + response.error);
+	}
+
+	settings = response.actions;
+	visitedConfig = response.visited || { enabled: true, color: "" };
+	visitedUrls = new Set(visitedResponse.urls || []);
+
+	applyVisitedColor();
+	markElementTree(document);
+	startVisitedObserver();
+
+	var allowed = true;
+	for (var i in (response.blocked || [])) {
+		if (response.blocked[i] == "") continue;
+		var re = new RegExp(response.blocked[i], "i");
+
+		if (re.test(window.location.href)) {
+			allowed = false;
+			console.log("[Linkclump] 此站点已被黑名单屏蔽：" + response.blocked[i] + " ~ " + window.location.href);
+		}
+	}
+
+	if (allowed) {
+		window.addEventListener("mousedown", mousedown, true);
+		window.addEventListener("keydown", keydown, true);
+		window.addEventListener("keyup", keyup, true);
+		window.addEventListener("blur", blur, true);
+		window.addEventListener("contextmenu", contextmenu, true);
+	}
+}).catch(function (error) {
+	console.log("[Linkclump] 初始化失败：" + error);
 });
 
-chrome.extension.onMessage.addListener(function(request, sender, callback) {
+chrome.runtime.onMessage.addListener(function (request) {
 	if (request.message === "update") {
-		this.settings = request.settings.actions;
+		settings = request.settings.actions;
+		visitedConfig = request.settings.visited || visitedConfig;
+		applyVisitedColor();
+		markElementTree(document);
+	} else if (request.message === "visitedCleared") {
+		clearVisitedNow();
 	}
 });
 
@@ -137,16 +345,18 @@ function mousedown(event) {
 			}
 
 			// create the box
-			if (this.box === null) {
-				this.box = document.createElement("span");
-				this.box.style.margin = "0px auto";
-				this.box.style.border = "2px dotted" + this.settings[this.setting].color;
-				this.box.style.position = "absolute";
-				this.box.style.zIndex = Z_INDEX;
-				this.box.style.visibility = "hidden";
+		if (this.box === null) {
+			this.box = document.createElement("span");
+			this.box.className = VISITED_BOX_CLASS;
+			this.box.style.margin = "0px auto";
+			this.box.style.border = "2px dotted " + this.settings[this.setting].color;
+			this.box.style.position = "absolute";
+			this.box.style.zIndex = Z_INDEX;
+			this.box.style.visibility = "hidden";
 
-				count_label = document.createElement("span");
-				count_label.style.zIndex = Z_INDEX;
+			count_label = document.createElement("span");
+			count_label.className = VISITED_BOX_CLASS;
+			count_label.style.zIndex = Z_INDEX;
 				count_label.style.position = "absolute";
 				count_label.style.visibility = "hidden";
 				count_label.style.left = "10px";
@@ -171,6 +381,7 @@ function mousedown(event) {
 			window.addEventListener("mousemove", mousemove, true);
 			window.addEventListener("mouseup", mouseup, true);
 			window.addEventListener("mousewheel", mousewheel, true);
+			window.addEventListener("wheel", mousewheel, true);
 			window.addEventListener("mouseout", mouseout, true);
 		}
 	}
@@ -241,39 +452,20 @@ function mouseup(event) {
 	}
 }
 
+// 旧的 WebKitCSSMatrix + offsetParent 累加在 Chrome 150+ 上对 transform / 滚动容器
+// 会算错，且 webkitTransform 为 "none" 时会直接抛异常导致整个框选失效。
 function getXY(element) {
-	var x = 0;
-	var y = 0;
-
-	var parent = element;
-	var style;
-	var matrix;
-	do {
-		style = window.getComputedStyle(parent);
-		matrix = new WebKitCSSMatrix(style.webkitTransform);
-		x += parent.offsetLeft + matrix.m41;
-		y += parent.offsetTop + matrix.m42;
-	} while (parent = parent.offsetParent);
-
-	parent = element;
-	while (parent && parent !== document.body) {
-		if (parent.scrollleft) {
-			x -= parent.scrollLeft;
-		}
-		if (parent.scrollTop) {
-			y -= parent.scrollTop;
-		}
-		parent = parent.parentNode;
-	}
-
+	var rect = element.getBoundingClientRect();
 	return {
-		x: x,
-		y: y
+		x: rect.left + window.scrollX,
+		y: rect.top + window.scrollY
 	};
 }
 
 function start() {
-	// stop user from selecting text/elements
+	// 阻止页面文字被框选（khtmlUserSelect 在新版 Chrome 已失效）
+	document.body.style.userSelect = "none";
+	document.body.style.webkitUserSelect = "none";
 	document.body.style.khtmlUserSelect = "none";
 
 	// turn on the box
@@ -354,14 +546,17 @@ function start() {
 }
 
 function stop() {
-	// allow user to select text/elements
+	// 恢复页面文字选择
+	document.body.style.userSelect = "";
+	document.body.style.webkitUserSelect = "";
 	document.body.style.khtmlUserSelect = "";
 
-	// turn off mouse move and mouse up
-	window.removeEventListener("mousemove", this.mousemove, true);
-	window.removeEventListener("mouseup", this.mouseup, true);
-	window.removeEventListener("mousewheel", this.mousewheel, true);
-	window.removeEventListener("mouseout", this.mouseout, true);
+	// 关闭鼠标监听
+	window.removeEventListener("mousemove", mousemove, true);
+	window.removeEventListener("mouseup", mouseup, true);
+	window.removeEventListener("mousewheel", mousewheel, true);
+	window.removeEventListener("wheel", mousewheel, true);
+	window.removeEventListener("mouseout", mouseout, true);
 
 	if (this.box_on) {
 		this.clean_up();
@@ -460,9 +655,9 @@ function detech(x, y, open) {
 			}
 
 			if (this.links[i].box === null) {
-				var link_box = document.createElement("span");
-				link_box.style.id = "linkclump-link";
-				link_box.style.margin = "0px auto";
+			var link_box = document.createElement("span");
+			link_box.className = VISITED_BOX_CLASS;
+			link_box.style.margin = "0px auto";
 				link_box.style.border = "1px solid red";
 				link_box.style.position = "absolute";
 				link_box.style.width = this.links[i].width + "px";
@@ -494,11 +689,19 @@ function detech(x, y, open) {
 	count_label.innerText = count_tabs.size;
 
 	if (open_tabs.length > 0) {
-		chrome.extension.sendMessage({
+		chrome.runtime.sendMessage({
 			message: "activate",
 			urls: open_tabs,
 			setting: this.settings[this.setting]
+		}).catch(function (error) {
+			console.log("[Linkclump] 打开链接失败：" + error);
 		});
+
+		// 只有真正访问过的动作才标记；复制 / 加书签不算访问
+		var action = this.settings[this.setting].action;
+		if (action === "tabs" || action === "win") {
+			markVisitedNow(open_tabs.map(function (item) { return item.url; }));
+		}
 	}
 
 	return true;

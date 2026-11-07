@@ -1,71 +1,103 @@
-var CURRENT_VERSION = "5";
+// MV3 service worker 中没有 localStorage，设置改为 chrome.storage.local（异步）。
+const CURRENT_VERSION = "6";
 
-function SettingsManager() {}
-
-SettingsManager.prototype.load = function() {
-	try {
-		// load data from local storage
-		var data = localStorage["settings"];
-		
-		// attempt to parse, if unable then make the assumption it has been corrupted
-		return JSON.parse(data)
-	} catch(error) {
-		var settings = this.init();
-		settings.error = "Error: "+error+"|Data:"+data;
-		return settings;
-	}
+const DEFAULT_SETTINGS = {
+    actions: {
+        "101": {
+            mouse: 0,      // 左键
+            key: 90,       // Z 键
+            action: "tabs",
+            color: "#FFA500",
+            options: {
+                smart: 0,
+                ignore: [0],
+                delay: 0,
+                close: 0,
+                block: true,
+                reverse: false,
+                end: false
+            }
+        }
+    },
+    blocked: [],
+    // Chrome 136+ :visited 分区兼容
+    visited: {
+        enabled: true,
+        color: ""      // 留空 = 自动匹配站点已访问色，失败时用 Chrome 默认紫色
+    }
 };
 
-SettingsManager.prototype.save = function(settings) {
-	// remove any error messages from object (shouldn't be there)
-	if (settings.error !== undefined) {
-		delete settings.error;
-	}
-	
-	localStorage["settings"] = JSON.stringify(settings);
-};
+function copy(value) {
+    return JSON.parse(JSON.stringify(value));
+}
 
-SettingsManager.prototype.isInit = function() {
-	return (localStorage["version"] !== undefined);
-};
+export class SettingsManager {
+    normalize(settings) {
+        if (!settings.actions || Object.keys(settings.actions).length === 0) {
+            settings.actions = copy(DEFAULT_SETTINGS.actions);
+        }
+        if (!Array.isArray(settings.blocked)) {
+            settings.blocked = [];
+        }
+        if (!settings.visited || typeof settings.visited !== "object") {
+            settings.visited = copy(DEFAULT_SETTINGS.visited);
+        }
+        if (typeof settings.visited.enabled !== "boolean") {
+            settings.visited.enabled = true;
+        }
+        if (typeof settings.visited.color !== "string") {
+            settings.visited.color = "";
+        }
+        return settings;
+    }
 
-SettingsManager.prototype.isLatest = function() {
-	return (localStorage["version"] === CURRENT_VERSION);
-};
+    async load() {
+        try {
+            const data = await chrome.storage.local.get(["settings", "version"]);
+            if (!data.settings) {
+                const settings = await this.init();
+                settings.error = "未找到设置，已恢复默认值";
+                return settings;
+            }
+            return this.normalize(JSON.parse(JSON.stringify(data.settings)));
+        } catch (error) {
+            const settings = copy(DEFAULT_SETTINGS);
+            settings.error = "读取设置失败：" + error;
+            return settings;
+        }
+    }
 
-SettingsManager.prototype.init = function() {
-	// create default settings for first time user
-	var settings = {
-			"actions": {
-				"101": {
-					"mouse": 0,  // left mouse button
-					"key": 90,   // z key
-					"action": "tabs",
-					"color": "#FFA500",
-					"options": {
-						"smart": 0,
-						"ignore": [0],
-						"delay": 0,
-						"close": 0,
-						"block": true,
-						"reverse": false,
-						"end": false
-					}
-				}
-			},
-			"blocked": []
-		};
+    async save(settings) {
+        delete settings.error;
+        const clean = this.normalize(JSON.parse(JSON.stringify(settings)));
+        await chrome.storage.local.set({ settings: clean, version: CURRENT_VERSION });
+        return clean;
+    }
 
-	// save settings to store
-	localStorage["settings"] = JSON.stringify(settings);
-	localStorage["version"] = CURRENT_VERSION;
-	
-	return settings;
-};
+    async isInit() {
+        const data = await chrome.storage.local.get("version");
+        return data.version !== undefined;
+    }
 
+    async isLatest() {
+        const data = await chrome.storage.local.get("version");
+        return data.version === CURRENT_VERSION;
+    }
 
-SettingsManager.prototype.update = function() {
-	if (!this.isInit()) {
-		this.init();
-	}
-};
+    async init() {
+        const settings = copy(DEFAULT_SETTINGS);
+        await chrome.storage.local.set({ settings: settings, version: CURRENT_VERSION });
+        return settings;
+    }
+
+    async update() {
+        if (!(await this.isInit())) {
+            return this.init();
+        }
+        const settings = await this.load();
+        delete settings.error;
+        return this.save(settings);
+    }
+}
+
+export { CURRENT_VERSION, DEFAULT_SETTINGS };
