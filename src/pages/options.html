@@ -70,8 +70,11 @@
 				<p><label for="visited_enabled" style="float:none;width:auto;">启用已访问标记</label>
 					<input type="checkbox" id="visited_enabled" checked /></p>
 				<p><label for="visited_color" style="float:none;width:auto;">标记颜色</label>
-					<input type="text" id="visited_color" size="18" placeholder="留空 = 自动匹配站点" />
-					<span class="hint">可填 #551A8B、#8E8E8E 等；留空时自动读取站点自己的已访问色，读不到则用 Chrome 默认紫色。</span></p>
+					<input type="text" id="visited_color" size="18" placeholder="#551A8B" />
+					<span class="hint">默认 <code>#551A8B</code>（深紫，浅色背景上清晰）。可填任意深色，如 <code>#C00000</code> 深红、<code>#00695C</code> 深青；留空即恢复默认深紫。</span></p>
+				<p><label for="visited_auto_color" style="float:none;width:auto;">跟随站点自己的已访问色</label>
+					<input type="checkbox" id="visited_auto_color" />
+					<span class="hint">默认关闭。勾选后忽略上面的颜色，直接读取站点自己的 <code>a:visited</code> 色；很多站点把它设成很淡的灰，会看不清。</span></p>
 				<p><label for="visited_auto" style="float:none;width:auto;">自动标记新加载的链接</label>
 					<input type="checkbox" id="visited_auto" />
 					<span class="hint">默认关闭。开启后会监听页面 DOM 并给新出现的链接染色；与 Bilibili-Evolved 等脚本同时使用时可能导致页面卡顿，B 站建议保持关闭。</span></p>

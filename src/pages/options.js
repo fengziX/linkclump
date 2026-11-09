@@ -525,17 +525,23 @@ function show_visited_status(text) {
 	setTimeout(function () { status.fadeOut(); }, 1800);
 }
 
+var DEFAULT_VISITED_COLOR = "#551A8B";
+
 function load_visited() {
-	var v = params.visited || { enabled: true, color: "", auto: false };
+	var v = params.visited || { enabled: true, color: DEFAULT_VISITED_COLOR, autoColor: false, auto: false };
 	$("#visited_enabled").prop("checked", v.enabled !== false);
-	$("#visited_color").val(v.color || "");
+	$("#visited_color").val(v.color || DEFAULT_VISITED_COLOR);
+	$("#visited_auto_color").prop("checked", v.autoColor === true);
 	$("#visited_auto").prop("checked", v.auto === true);
 }
 
 function save_visited() {
+	var color = $.trim($("#visited_color").val() || "") || DEFAULT_VISITED_COLOR;
+	$("#visited_color").val(color);
 	params.visited = {
 		enabled: $("#visited_enabled").is(":checked"),
-		color: $.trim($("#visited_color").val() || ""),
+		color: color,
+		autoColor: $("#visited_auto_color").is(":checked"),
 		auto: $("#visited_auto").is(":checked")
 	};
 	save_params();
@@ -569,6 +575,7 @@ $(function() {
 	document.getElementById("save").addEventListener("click", save_action);
 	$("#visited_enabled").on("change", save_visited);
 	$("#visited_color").on("change", save_visited);
+	$("#visited_auto_color").on("change", save_visited);
 	$("#visited_auto").on("change", save_visited);
 	$("#visited_clear").on("click", clear_visited);
 
@@ -579,7 +586,7 @@ $(function() {
 	}).then(function(response){
 		params = response;
 		if (!params.visited) {
-			params.visited = { enabled: true, color: "" };
+			params.visited = { enabled: true, color: DEFAULT_VISITED_COLOR, autoColor: false, auto: false };
 		}
 
 		for(var i in params.actions) {

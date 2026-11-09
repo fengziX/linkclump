@@ -1,5 +1,6 @@
 // MV3 service worker 中没有 localStorage，设置改为 chrome.storage.local（异步）。
-const CURRENT_VERSION = "6";
+const CURRENT_VERSION = "7";
+const DEFAULT_VISITED_COLOR = "#551A8B";
 
 const DEFAULT_SETTINGS = {
     actions: {
@@ -23,8 +24,10 @@ const DEFAULT_SETTINGS = {
     // Chrome 136+ :visited 分区兼容
     visited: {
         enabled: true,
-        color: "",     // 留空 = 自动匹配站点已访问色，失败时用 Chrome 默认紫色
-        auto: false    // 自动标记新加载的链接（监听 DOM，与 Bilibili-Evolved 等脚本冲突，默认关闭）
+        // 3.0.3 起默认用 Chrome 原生已访问紫：站点自定义的 a:visited 常是淡灰，几乎看不清
+        color: DEFAULT_VISITED_COLOR,
+        autoColor: false, // 显式开启才去匹配站点的 a:visited 色
+        auto: false       // 自动标记新加载的链接（监听 DOM，与 Bilibili-Evolved 等脚本冲突，默认关闭）
     }
 };
 
@@ -46,8 +49,15 @@ export class SettingsManager {
         if (typeof settings.visited.enabled !== "boolean") {
             settings.visited.enabled = true;
         }
-        if (typeof settings.visited.color !== "string") {
-            settings.visited.color = "";
+        // 3.0.2 及更早：color 为空表示自动匹配站点色，站点常把 a:visited 设成淡灰。
+        // 升级到 3.0.3 时补上醒目默认色，用户无需手动去选项页改。
+        if (typeof settings.visited.color !== "string" || settings.visited.color.trim() === "") {
+            settings.visited.color = DEFAULT_VISITED_COLOR;
+        } else {
+            settings.visited.color = settings.visited.color.trim();
+        }
+        if (typeof settings.visited.autoColor !== "boolean") {
+            settings.visited.autoColor = false;
         }
         if (typeof settings.visited.auto !== "boolean") {
             settings.visited.auto = false;

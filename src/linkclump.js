@@ -31,6 +31,8 @@ var timer = 0;
    于是标题文字不变色。此机制无法在扩展内恢复，改为自己记录 URL 并给 <a> 加标记。 */
 const VISITED_CLASS = "linkclump-visited";
 const VISITED_BOX_CLASS = "linkclump-box";
+// Chrome 原生已访问紫，在浅色背景上对比度约 8:1；站点自定义的 a:visited 常是淡灰。
+const DEFAULT_VISITED_COLOR = "#551A8B";
 // 与 Bilibili-Evolved 等重度脚本共存的关键：每次 classList.add 都是一条 attribute mutation，
 // B-E 的 allMutations（document.body + attributes:true）会给每个订阅者对每条 mutation 跑一次全文档查询。
 // 因此默认只标记视口内少量链接、分批摊开，且不监听 DOM；iframe 里完全不自动标记。
@@ -39,7 +41,17 @@ const VISIBLE_MARK_LIMIT = 40;
 const MARK_TOTAL_LIMIT = 120;
 const MARK_BATCH_SIZE = 6;
 const MARK_BATCH_DELAY = 250;
-let visitedConfig = { enabled: true, color: "", auto: false };
+let visitedConfig = normalizeVisitedConfig(null);
+
+function normalizeVisitedConfig(value) {
+	var v = value || {};
+	return {
+		enabled: v.enabled !== false,
+		color: (typeof v.color === "string" && v.color.trim()) ? v.color.trim() : DEFAULT_VISITED_COLOR,
+		autoColor: v.autoColor === true,
+		auto: v.auto === true
+	};
+}
 let visitedUrls = new Set();
 let visitedObserver = null;
 let visitedTimer = 0;
@@ -148,7 +160,7 @@ function detectSiteVisitedColor() {
 // 同源外链样式表异步补检（跨域 / CDN 样式表读不到时由用户在选项里手填颜色）。
 // 限制最多 2 个、延迟到页面空闲，避免在 B 站这类多 CSS 站点重复下载/解析。
 function fetchSiteVisitedColor() {
-	if (!IS_TOP_FRAME || !visitedConfig.enabled || visitedConfig.color) {
+	if (!IS_TOP_FRAME || !visitedConfig.enabled || visitedConfig.autoColor !== true) {
 		return;
 	}
 	var hrefs = [];
@@ -165,10 +177,10 @@ function fetchSiteVisitedColor() {
 		for (var k = 0; k < hrefs.length; k++) {
 			(function (target) {
 				fetch(target).then(function (response) { return response.text(); }).then(function (text) {
-					var color = parseVisitedColor(text.slice(0, 500000));
-					if (color && !visitedConfig.color) {
-						document.documentElement.style.setProperty("--linkclump-visited-color", color);
-					}
+				var color = parseVisitedColor(text.slice(0, 500000));
+				if (color && visitedConfig.autoColor === true) {
+					document.documentElement.style.setProperty("--linkclump-visited-color", color);
+				}
 				}).catch(function () { /* 忽略 */ });
 			})(hrefs[k]);
 		}
@@ -187,14 +199,17 @@ function applyVisitedColor() {
 	}
 	document.documentElement.classList.add("linkclump-visited-on");
 	var custom = (visitedConfig.color || "").trim();
-	var detected = custom ? "" : detectSiteVisitedColor();
-	var color = custom || detected || "#551A8B";
+	// 勾选「跟随站点色」时忽略手填颜色；否则用手填色，空则回退醒目的默认深紫。
+	// 默认不跟随站点：站点自定义的 a:visited 常是淡灰，几乎看不清。
+	var useAuto = visitedConfig.autoColor === true;
+	var detected = useAuto ? detectSiteVisitedColor() : "";
+	var color = detected || custom || DEFAULT_VISITED_COLOR;
 	try {
 		if (document.documentElement.style.getPropertyValue("--linkclump-visited-color") !== color) {
 			document.documentElement.style.setProperty("--linkclump-visited-color", color);
 		}
 	} catch (error) { /* 忽略 */ }
-	if (!custom && !detected) {
+	if (useAuto && !detected) {
 		fetchSiteVisitedColor();
 	}
 }
@@ -353,10 +368,7 @@ Promise.all([
 	}
 
 	settings = response.actions;
-	visitedConfig = response.visited || { enabled: true, color: "", auto: false };
-	if (typeof visitedConfig.auto !== "boolean") {
-		visitedConfig.auto = false;
-	}
+	visitedConfig = normalizeVisitedConfig(response.visited);
 	visitedUrls = new Set(IS_TOP_FRAME ? (visitedResponse.urls || []) : []);
 
 	applyVisitedColor();
@@ -388,10 +400,7 @@ Promise.all([
 chrome.runtime.onMessage.addListener(function (request) {
 	if (request.message === "update") {
 		settings = request.settings.actions;
-		visitedConfig = request.settings.visited || visitedConfig;
-		if (typeof visitedConfig.auto !== "boolean") {
-			visitedConfig.auto = false;
-		}
+		visitedConfig = normalizeVisitedConfig(request.settings.visited);
 		if (!visitedConfig.auto && visitedObserver) {
 			visitedObserver.disconnect();
 			visitedObserver = null;
